@@ -131,11 +131,8 @@ class Okq extends Redis
         $timeout = (string)$timeout;
         while ($continue) {
             $queue = $this->qnotify($timeout);
-            if ($queue === false) {
-                break;
-            }
 
-            if ($queue) {
+            if (!empty($queue)) {
                 $queue = (string)$queue;
                 $event = $this->rawCommand('QRPOP', $queue);
                 if ($event === false) {
