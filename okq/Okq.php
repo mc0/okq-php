@@ -2,9 +2,9 @@
 
 class Okq extends Redis
 {
-    const EVENT_ACK = 'ack';
-    const EVENT_NOACK = 'noack';
-    const EVENT_STOP = 'stop';
+    const EVENT_ACK = 1;
+    const EVENT_NOACK = 2;
+    const EVENT_STOP = 4;
 
     private function doPush($queue, $eventId, $contents, $noBlock, $pushRight = false)
     {
@@ -146,19 +146,14 @@ class Okq extends Redis
             }
 
             $response = call_user_func($callback, $event);
-            switch ($response) {
-                case self::EVENT_ACK:
-                    if (isset($event['id'])) {
-                        $eventId = (string)$event['id'];
-                        $this->qack($queue, $eventId);
-                    }
-                    break;
-                case self::EVENT_STOP:
-                    $continue = false;
-                    break;
-                case self::EVENT_NOACK:
-                default:
-                    break;
+            if (($response & self::EVENT_ACK) === self::EVENT_ACK) {
+                if (isset($event['id'])) {
+                    $eventId = (string)$event['id'];
+                    $this->qack($queue, $eventId);
+                }
+            }
+            if (($response & self::EVENT_STOP) === self::EVENT_STOP) {
+                $continue = false;
             }
         }
 
