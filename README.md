@@ -39,7 +39,7 @@ If you're a consumer you can just use the convenience `consume` method.
 */
 $callback = function ($event) use ($q) {
     // do anything or nothing at all
-    return Okq::STATUS_ACK;
+    return Okq::EVENT_ACK;
 };
 $timeout = 30;
 $q->consume($callback, array('testQueue'), $timeout);
