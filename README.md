@@ -16,7 +16,8 @@ of the okQ command itself. The `Okq` class extends [phpredis/Redis](https://gith
 and can be constructed using the same arguments:
 
 ```PHP
-$q = new Okq('127.0.0.1');
+$q = new Okq();
+$q->connect('127.0.0.1', 4777);
 ```
 
 Then to add jobs you just run the command!
@@ -34,11 +35,11 @@ If you're a consumer you can just use the convenience `consume` method.
  - array('StaticClass', 'funcName')
  - array($obj, 'funcName')
  - 'funcName'
- - create_function('$queue,$event', '...')
+ - create_function('$event', '...')
 */
-$callback = function ($queue, $event) use ($q) {
+$callback = function ($event) use ($q) {
     // do anything or nothing at all
-    return Okq::STATUS_ACK;
+    return Okq::EVENT_ACK;
 };
 $timeout = 30;
 $q->consume($callback, array('testQueue'), $timeout);

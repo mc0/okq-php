@@ -2,11 +2,11 @@
 
 class Okq extends Redis
 {
-    const EVENT_ACK = 'ack';
-    const EVENT_NOACK = 'noack';
-    const EVENT_STOP = 'stop';
+    const EVENT_ACK = 1;
+    const EVENT_NOACK = 2;
+    const EVENT_STOP = 4;
 
-    private function doPush($queue, $eventId, $contents, $pushRight = false)
+    private function doPush($queue, $eventId, $contents, $noBlock, $pushRight = false)
     {
         $queue = (string)$queue;
         $contents = (string)$contents;
@@ -20,7 +20,12 @@ class Okq extends Redis
         } else {
             $command = 'QLPUSH';
         }
-        $response = $this->rawCommand($command, $queue, $eventId, $contents);
+
+        $rawCommandArgs = array($command, $queue, $eventId, $contents);
+        if ($noBlock) {
+            $rawCommandArgs[] = 'NOBLOCK';
+        }
+        $response = call_user_func_array(array($this, 'rawCommand'), $rawCommandArgs);
         if ($response === false) {
             $lastError = $this->getLastError();
             trigger_error("Okq - failed to send $command $queue $eventId: $lastError", E_USER_ERROR);
@@ -47,6 +52,7 @@ class Okq extends Redis
         $queue = (string)$queue;
         $rawCommandArgs = array('QRPOP', $queue);
         if (!is_null($ackTimeout)) {
+            $rawCommandArgs[] = 'EX';
             $rawCommandArgs[] = (string)$ackTimeout;
         }
         if ($noAck) {
@@ -78,14 +84,14 @@ class Okq extends Redis
         return $response;
     }
 
-    public function qlpush($queue, $contents, $eventId = null)
+    public function qlpush($queue, $contents, $noBlock = false, $eventId = null)
     {
-        return $this->doPush($queue, $eventId, $contents, false);
+        return $this->doPush($queue, $eventId, $contents, $noBlock, false);
     }
 
-    public function qrpush($queue, $contents, $eventId = null)
+    public function qrpush($queue, $contents, $noBlock = false, $eventId = null)
     {
-        return $this->doPush($queue, $eventId, $contents, true);
+        return $this->doPush($queue, $eventId, $contents, $noBlock, true);
     }
 
     public function qnotify($timeout)
@@ -105,7 +111,7 @@ class Okq extends Redis
         return $response;
     }
 
-    public function consume($callback, $queues = null, $timeout = 30)
+    public function consume($callback, $queues, $timeout = 30)
     {
         if (is_array($queues) && empty($queues)) {
             throw new Exception('Okq - no queues provided');
@@ -116,16 +122,8 @@ class Okq extends Redis
         if (!is_numeric($timeout) || $timeout < 0) {
             throw new Exception('Okq - timeout must be at least 0');
         }
-        $this->clearLastError();
 
-        if (!empty($queues) && is_array($queues)) {
-            $response = $this->qregister($queues);
-            if ($response === false) {
-                $lastError = $this->getLastError();
-                trigger_error("Okq - failed to send QREGISTER: $lastError", E_USER_ERROR);
-                return false;
-            }
-        }
+        $this->qregister($queues);
 
         $continue = true;
         $timeout = (string)$timeout;
@@ -134,32 +132,28 @@ class Okq extends Redis
 
             if (!empty($queue)) {
                 $queue = (string)$queue;
-                $event = $this->rawCommand('QRPOP', $queue);
-                if ($event === false) {
-                    break;
+                $rawEvent = $this->rawCommand('QRPOP', $queue);
+                if (!isset($rawEvent[1])) {
+                    continue;
                 }
+                $event = array(
+                    'id' => $rawEvent[0],
+                    'contents' => $rawEvent[1],
+                    'queue' => $queue,
+                );
             } else {
                 $event = null;
             }
 
-            $response = call_user_func($callback, $queue, $event);
-            switch ($response) {
-                case self::EVENT_ACK:
-                    if (!is_null($event) && !isset($event[0])) {
-                        $eventId = (string)$event[0];
-                        $ack = $this->qack($queue, $eventId);
-                        if ($ack === false) {
-                            $continue = false;
-                            break;
-                        }
-                    }
-                    break;
-                case self::EVENT_STOP:
-                    $continue = false;
-                    break;
-                case self::EVENT_NOACK:
-                default:
-                    break;
+            $response = call_user_func($callback, $event);
+            if (($response & self::EVENT_ACK) === self::EVENT_ACK) {
+                if (isset($event['id'])) {
+                    $eventId = (string)$event['id'];
+                    $this->qack($queue, $eventId);
+                }
+            }
+            if (($response & self::EVENT_STOP) === self::EVENT_STOP) {
+                $continue = false;
             }
         }
 
