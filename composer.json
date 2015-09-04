@@ -1,0 +1,7 @@
+{
+    "name": "mc0/okq",
+    "description": "A PHP driver for the okQ persistent queue",
+    "require": {
+        "php": ">=5.3.0"
+    }
+}
