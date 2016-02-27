@@ -1,6 +1,10 @@
 <?php
 
-class Okq extends Redis
+namespace Okq;
+
+use Redis;
+
+class Client extends Redis
 {
     const EVENT_ACK = 1;
     const EVENT_NOACK = 2;
@@ -15,17 +19,13 @@ class Okq extends Redis
         } else {
             $eventId = (string)$eventId;
         }
-        if ($pushRight) {
-            $command = 'QRPUSH';
-        } else {
-            $command = 'QLPUSH';
-        }
+        $command = $pushRight ? 'QRPUSH' : 'QLPUSH';
 
-        $rawCommandArgs = array($command, $queue, $eventId, $contents);
+        $rawCommandArgs = [$command, $queue, $eventId, $contents];
         if ($noBlock) {
             $rawCommandArgs[] = 'NOBLOCK';
         }
-        $response = call_user_func_array(array($this, 'rawCommand'), $rawCommandArgs);
+        $response = call_user_func_array([$this, 'rawCommand'], $rawCommandArgs);
         if ($response === false) {
             $lastError = $this->getLastError();
             trigger_error("Okq - failed to send $command $queue $eventId: $lastError", E_USER_ERROR);
@@ -43,14 +43,14 @@ class Okq extends Redis
     {
         $rawCommandArgs = $queues;
         array_unshift($rawCommandArgs, 'QREGISTER');
-        $response = call_user_func_array(array($this, 'rawCommand'), $rawCommandArgs);
+        $response = call_user_func_array([$this, 'rawCommand'], $rawCommandArgs);
         return $response;
     }
 
     public function qrpop($queue, $ackTimeout = null, $noAck = false)
     {
         $queue = (string)$queue;
-        $rawCommandArgs = array('QRPOP', $queue);
+        $rawCommandArgs = ['QRPOP', $queue];
         if (!is_null($ackTimeout)) {
             $rawCommandArgs[] = 'EX';
             $rawCommandArgs[] = (string)$ackTimeout;
@@ -58,7 +58,7 @@ class Okq extends Redis
         if ($noAck) {
             $rawCommandArgs[] = 'NOACK';
         }
-        $event = call_user_func_array(array($this, 'rawCommand'), $rawCommandArgs);
+        $event = call_user_func_array([$this, 'rawCommand'], $rawCommandArgs);
         return $event;
     }
 
@@ -104,23 +104,23 @@ class Okq extends Redis
     {
         if (is_array($queues)) {
             array_unshift($queues, 'STATUS');
-            $response = call_user_func_array(array($this, 'rawCommand'), $queues);
+            $response = call_user_func_array([$this, 'rawCommand'], $queues);
         } else {
             $response = $this->rawCommand('STATUS');
         }
         return $response;
     }
 
-    public function consume($callback, $queues, $timeout = 30)
+    public function consume($callback, $queues, $timeout = 5)
     {
         if (is_array($queues) && empty($queues)) {
-            throw new Exception('Okq - no queues provided');
+            throw new \Exception('Okq - no queues provided');
         }
         if (!is_callable($callback)) {
-            throw new Exception('Okq - the provided callback is not callable');
+            throw new \Exception('Okq - the provided callback is not callable');
         }
         if (!is_numeric($timeout) || $timeout < 0) {
-            throw new Exception('Okq - timeout must be at least 0');
+            throw new \Exception('Okq - timeout must be at least 0');
         }
 
         $this->qregister($queues);
@@ -136,11 +136,11 @@ class Okq extends Redis
                 if (!isset($rawEvent[1])) {
                     continue;
                 }
-                $event = array(
+                $event = [
                     'id' => $rawEvent[0],
                     'contents' => $rawEvent[1],
                     'queue' => $queue,
-                );
+                ];
             } else {
                 $event = null;
             }
@@ -163,27 +163,27 @@ class Okq extends Redis
     public static function getUUID($input = null)
     {
         $format = '%04x%04x-%04x-%04x-%04x-%04x%04x%04x';
-        $v = array();
+        $v = [];
         if ($input) {
             $data = md5($input);
             $result = unpack('S*', hex2bin($data));
-            $v[] = $result[1];
-            $v[] = $result[2];
-            $v[] = $result[3];
-            $v[] = ($result[4] & 0x0fff) | 0x4000;
-            $v[] = ($result[5] & 0x3fff) | 0x8000;
-            $v[] = $result[6];
-            $v[] = $result[7];
-            $v[] = $result[8];
+            $v []= $result[1];
+            $v []= $result[2];
+            $v []= $result[3];
+            $v []= ($result[4] & 0x0fff) | 0x4000;
+            $v []= ($result[5] & 0x3fff) | 0x8000;
+            $v []= $result[6];
+            $v []= $result[7];
+            $v []= $result[8];
         } else {
-            $v[] = mt_rand(0, 0xffff);
-            $v[] = mt_rand(0, 0xffff);
-            $v[] = mt_rand(0, 0xffff);
-            $v[] = mt_rand(0, 0x0fff) | 0x4000;
-            $v[] = mt_rand(0, 0x3fff) | 0x8000;
-            $v[] = mt_rand(0, 0xffff);
-            $v[] = mt_rand(0, 0xffff);
-            $v[] = mt_rand(0, 0xffff);
+            $v []= mt_rand(0, 0xffff);
+            $v []= mt_rand(0, 0xffff);
+            $v []= mt_rand(0, 0xffff);
+            $v []= mt_rand(0, 0x0fff) | 0x4000;
+            $v []= mt_rand(0, 0x3fff) | 0x8000;
+            $v []= mt_rand(0, 0xffff);
+            $v []= mt_rand(0, 0xffff);
+            $v []= mt_rand(0, 0xffff);
         }
         return sprintf($format, $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7]);
     }
